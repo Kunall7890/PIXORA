@@ -31,7 +31,7 @@ class CreativeStrategyAgent:
             
             prompt = self._build_strategy_prompt(product_data, brand)
             
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
@@ -44,7 +44,7 @@ class CreativeStrategyAgent:
             )
             
             # Parse response and structure it
-            strategy = self._parse_strategy_response(response.content[0].text)
+            strategy = self._parse_strategy_response(response.choices[0].message.content)
             logger.info("✓ Creative strategy generated successfully")
             return strategy
             
@@ -70,7 +70,7 @@ PRODUCT INFO:
 - Description: {description}
 - Key Features: {features}
 - Price: ${price if price else 'N/A'}
-- Rating: {rating}/5 if rating else 'Not rated'}
+- Rating: {f"{rating}/5" if rating else 'Not rated'}
 
 Generate EXACTLY this JSON structure (no markdown, pure JSON):
 {{
