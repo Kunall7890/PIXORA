@@ -32,29 +32,30 @@ class ImageGenerator:
             self.has_diffusers = False
             logger.warning("Diffusers not installed - using mock image generation")
     
-    async def generate_images(self, prompts: List[str]) -> List[Dict]:
+    async def generate_images(self, prompts: List[str], product_data: Dict = None) -> List[Dict]:
         """
-        Generate 5 product marketing images from prompts
-        
+        Generate product marketing images from prompts
+
         Returns:
             List of Dict with id, prompt, url, local_path, created_at, quality_score
         """
         try:
-            logger.info(f"Generating {len(prompts)} product images")
-            
+            title = (product_data or {}).get("title", "Product")
+            logger.info(f"Generating {len(prompts)} images for: {title}")
+
             if self.has_diffusers and len(prompts) > 0:
-                images = await self._generate_with_diffusers(prompts)
+                images = await self._generate_with_diffusers(prompts, product_data)
             else:
-                images = await self._generate_mock_images(prompts)
+                images = await self._generate_mock_images(prompts, product_data)
             
             logger.info(f"✓ Generated {len(images)} images")
             return images
             
         except Exception as e:
             logger.error(f"Error generating images: {str(e)}")
-            return await self._generate_mock_images(prompts)
-    
-    async def _generate_with_diffusers(self, prompts: List[str]) -> List[Dict]:
+            return await self._generate_mock_images(prompts, product_data)
+
+    async def _generate_with_diffusers(self, prompts: List[str], product_data: Dict = None) -> List[Dict]:
         """Generate images using local Stable Diffusion"""
         try:
             from diffusers import StableDiffusionXLPipeline
@@ -112,11 +113,13 @@ class ImageGenerator:
         
         except Exception as e:
             logger.error(f"Diffusers generation failed: {str(e)}")
-            return await self._generate_mock_images(prompts)
-    
-    async def _generate_mock_images(self, prompts: List[str]) -> List[Dict]:
+            return await self._generate_mock_images(prompts, product_data)
+
+    async def _generate_mock_images(self, prompts: List[str], product_data: Dict = None) -> List[Dict]:
         """Generate mock images for testing"""
-        logger.info("Generating mock product images for demo...")
+        title = (product_data or {}).get("title", "Product")
+        brand = (product_data or {}).get("brand", "")
+        logger.info(f"Generating mock images for: {title}")
         
         images_list = []
         
@@ -132,9 +135,10 @@ class ImageGenerator:
                 # Draw product area
                 draw.rectangle([100, 100, 924, 924], fill='#ffffff', outline='#cccccc', width=2)
                 
-                # Add text
-                text = f"Product {i}\n{prompt[:80]}..."
-                draw.text((512, 512), text, fill='#333333', anchor='mm')
+                # Add product-specific text
+                label = f"{brand} {title}".strip() if brand and brand != "Unknown Brand" else title
+                text = f"{label}\n{prompt[:80]}..."
+                draw.text((512, 400), text, fill='#333333', anchor='mm')
                 
                 # Save
                 image_id = str(uuid.uuid4())[:8]

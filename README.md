@@ -604,7 +604,10 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
 ---
 
 **Made with ❤️ for E-commerce Brands** | Pixora v1.0 | 2024
-#   P I X O R A  
- #   P I X O R A  
- #   P I X O R A  
+#   P I X O R A 
+ 
+ #   P I X O R A 
+ 
+ #   P I X O R A 
+ 
  

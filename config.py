@@ -16,7 +16,7 @@ REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 
 # Models
-GROQ_MODEL = "mixtral-8x7b-32768"  # Free tier model
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 IMAGE_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
 VIDEO_MODEL = "cogvideox"  # Via Replicate
 

@@ -101,25 +101,71 @@ with tab1:
                     
                     if response.status_code == 200:
                         result = response.json()
-                        
+                        meta = result.get("pipeline_meta", {})
+                        proc_time = result.get("total_processing_time", 0)
+
+                        # Warn if running old engine or instant fallback (no LLM)
+                        if not meta:
+                            st.warning(
+                                "⚠️ Backend is running an **old version**. "
+                                "Stop and restart: `python api/main.py`"
+                            )
+                        elif proc_time < 5 and meta.get("strategy_source", "").startswith("fallback"):
+                            st.warning(
+                                "⚠️ LLM could not run — check GROQ_API_KEY in `.env` and restart the backend."
+                            )
+                        elif meta.get("engine_version"):
+                            st.caption(f"Engine v{meta['engine_version']} · {proc_time:.0f}s · sources: {meta}")
+
                         # Display results
                         st.success("✅ Creatives generated successfully!")
                         
                         # Product Data
                         st.subheader("📦 Product Information")
-                        col1, col2, col3 = st.columns(3)
-                        
+                        col1, col2, col3, col4 = st.columns(4)
+
                         product = result.get("product_data", {})
                         with col1:
-                            st.metric("Title", product.get("title", "N/A")[:30])
+                            st.metric("Title", product.get("title", "N/A")[:40])
                         with col2:
-                            st.metric("Price", f"${product.get('price', 'N/A')}")
+                            price = product.get("price")
+                            currency = product.get("currency", "USD")
+                            st.metric("Price", f"{currency} {price}" if price else "N/A")
                         with col3:
                             st.metric("Rating", f"⭐ {product.get('rating', 'N/A')}/5")
+                        with col4:
+                            st.metric("Brand", product.get("brand", "N/A")[:20])
+
+                        if product.get("description"):
+                            st.write("**Product Description:**")
+                            st.write(product.get("description", ""))
+                            if product.get("short_summary"):
+                                st.caption(product.get("short_summary"))
+                            if product.get("category"):
+                                st.caption(f"Category: {product.get('category')}")
+                            src = product.get("extraction_source", "")
+                            if src:
+                                st.caption(f"Data source: {src}")
+
+                        if product.get("features"):
+                            st.write("**Key Features:**")
+                            for feat in product.get("features", [])[:6]:
+                                st.write(f"• {feat}")
+
+                        # Show scraped product image if available
+                        scraped_images = product.get("image_urls", [])
+                        if scraped_images:
+                            st.write("**Product Image (from URL):**")
+                            try:
+                                st.image(scraped_images[0], width=300, caption=product.get("title", ""))
+                            except Exception:
+                                st.caption(scraped_images[0])
                         
                         # Creative Brief
                         st.subheader("💡 Creative Strategy")
                         brief = result.get("creative_brief", {})
+                        if brief.get("source"):
+                            st.caption(f"Strategy source: {brief.get('source')} · Product: {brief.get('product_title', product.get('title', ''))}")
                         
                         col1, col2 = st.columns(2)
                         with col1:
@@ -129,15 +175,22 @@ with tab1:
                             st.write("**Visual Themes:**")
                             for theme in brief.get("visual_themes", []):
                                 st.write(f"• {theme}")
-                        
+
+                            st.write("**Marketing Angles:**")
+                            for angle in brief.get("marketing_angles", [])[:3]:
+                                st.write(f"• {angle}")
+
                         with col2:
                             st.write("**Marketing Hooks:**")
-                            for hook in brief.get("hooks", [])[:3]:
+                            for hook in brief.get("hooks", [])[:5]:
                                 st.write(f"• {hook}")
-                            
+
                             st.write("**Color Palette:**")
                             for color in brief.get("color_palette", []):
                                 st.write(f"• {color}")
+
+                            st.write("**Tone of Voice:**")
+                            st.write(brief.get("tone_of_voice", "N/A"))
                         
                         # Generated Images
                         st.subheader("🖼️ Generated Images")
@@ -148,7 +201,18 @@ with tab1:
                             for idx, image in enumerate(images):
                                 with cols[idx % 3]:
                                     st.write(f"**Image {idx + 1}**")
-                                    st.caption(image.get("prompt", "")[:100])
+                                    img_url = image.get("url", "")
+                                    if img_url:
+                                        full_url = f"{api_url}{img_url}" if img_url.startswith("/") else img_url
+                                        try:
+                                            st.image(full_url, use_container_width=True)
+                                        except Exception:
+                                            download_url = f"{api_url}/api/v1/download/image/{image.get('id')}"
+                                            try:
+                                                st.image(download_url, use_container_width=True)
+                                            except Exception:
+                                                st.caption(f"Image saved at: {image.get('local_path', 'N/A')}")
+                                    st.caption(image.get("prompt", "")[:120])
                                     st.info(f"Quality: {image.get('quality_score', 0):.0%}")
                         else:
                             st.warning("No images generated")
@@ -160,7 +224,18 @@ with tab1:
                         if videos:
                             for idx, video in enumerate(videos):
                                 st.write(f"**Video {idx + 1}**")
-                                st.caption(video.get("script", "")[:150])
+                                vid_url = video.get("url", "")
+                                if vid_url:
+                                    full_url = f"{api_url}{vid_url}" if vid_url.startswith("/") else vid_url
+                                    try:
+                                        st.video(full_url)
+                                    except Exception:
+                                        download_url = f"{api_url}/api/v1/download/video/{video.get('id')}"
+                                        try:
+                                            st.video(download_url)
+                                        except Exception:
+                                            st.caption(f"Video saved at: {video.get('local_path', 'N/A')}")
+                                st.caption(video.get("script", "")[:200])
                                 st.info(f"Duration: {video.get('duration', 0):.1f}s")
                         else:
                             st.warning("No videos generated")
@@ -168,6 +243,9 @@ with tab1:
                         # Quality Review
                         st.subheader("✅ Quality Review")
                         review = result.get("critic_review", {})
+
+                        if review.get("product_title"):
+                            st.caption(f"Review for: **{review['product_title']}** · Source: {review.get('source', 'unknown')}")
                         
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:

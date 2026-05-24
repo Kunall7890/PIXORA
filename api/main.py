@@ -25,11 +25,12 @@ from api.models import (
 
 # Import agents and generators
 from agents.research_agent import product_researcher
+from agents.product_enrichment import ProductEnrichmentAgent
 from agents.strategy_agent import CreativeStrategyAgent
 from agents.prompt_generation_agent import PromptGenerationAgent
 from agents.critic_agent import CriticAgent
-from generation.image_generator import image_generator
-from generation.video_generator import video_generator
+from generation.image_generator import ImageGenerator
+from generation.video_generator import VideoGenerator
 from orchestration.workflow import WorkflowOrchestrator
 
 # Setup logging
@@ -52,14 +53,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount outputs directory for serving generated assets
+app.mount("/outputs", StaticFiles(directory=str(config.OUTPUTS_DIR)), name="outputs")
+
+# Initialize generators with config paths
+image_generator = ImageGenerator(output_dir=str(config.OUTPUTS_DIR / "images"))
+video_generator = VideoGenerator(
+    output_dir=str(config.OUTPUTS_DIR / "videos"),
+    replicate_token=config.REPLICATE_API_TOKEN or None,
+)
+
 # Initialize agents with Groq API key
 strategy_agent = CreativeStrategyAgent(config.GROQ_API_KEY)
+enrichment_agent = ProductEnrichmentAgent(config.GROQ_API_KEY)
 prompt_agent = PromptGenerationAgent(config.GROQ_API_KEY)
 critic_agent = CriticAgent(config.GROQ_API_KEY)
 
 # Initialize orchestrator
 orchestrator = WorkflowOrchestrator(
     research_agent=product_researcher,
+    enrichment_agent=enrichment_agent,
     strategy_agent=strategy_agent,
     prompt_agent=prompt_agent,
     critic_agent=critic_agent,
@@ -79,7 +92,10 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Pixora Creative Engine",
-        "timestamp": datetime.now().isoformat()
+        "engine_version": "2.2.0",
+        "groq_configured": bool(config.GROQ_API_KEY),
+        "groq_model": config.GROQ_MODEL,
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -105,7 +121,9 @@ async def generate_creatives(request: ProductURLRequest):
         # Execute workflow
         result = await orchestrator.execute_workflow(
             url=str(request.url),
-            brand_override=request.brand_override
+            brand_override=request.brand_override,
+            target_audience=request.target_audience,
+            custom_themes=request.custom_themes,
         )
         
         if result.get("status") == "failed":
@@ -141,7 +159,9 @@ async def generate_creatives_async(
         _execute_and_store,
         job_id,
         str(request.url),
-        request.brand_override
+        request.brand_override,
+        request.target_audience,
+        request.custom_themes,
     )
     
     return {
@@ -193,15 +213,26 @@ async def bulk_generate(
         csv_file = io.StringIO(content.decode('utf-8'))
         reader = csv.DictReader(csv_file)
         
-        urls = []
+        items = []
         for row in reader:
             if row.get("url"):
-                urls.append(row["url"])
-        
-        if not urls:
+                themes_raw = row.get("custom_themes", "")
+                custom_themes = (
+                    [t.strip() for t in themes_raw.split(";") if t.strip()]
+                    if themes_raw
+                    else None
+                )
+                items.append({
+                    "url": row["url"],
+                    "brand_override": row.get("brand_override") or None,
+                    "target_audience": row.get("target_audience") or None,
+                    "custom_themes": custom_themes,
+                })
+
+        if not items:
             raise HTTPException(status_code=400, detail="No URLs found in CSV")
-        
-        if len(urls) > config.MAX_BATCH_SIZE:
+
+        if len(items) > config.MAX_BATCH_SIZE:
             raise HTTPException(
                 status_code=400,
                 detail=f"Maximum batch size is {config.MAX_BATCH_SIZE}"
@@ -212,27 +243,27 @@ async def bulk_generate(
         
         jobs[job_id] = {
             "status": "queued",
-            "total_urls": len(urls),
+            "total_urls": len(items),
             "processed_urls": 0,
             "failed_urls": 0,
             "results": [],
             "created_at": datetime.now().isoformat(),
             "progress": 0
         }
-        
+
         # Schedule processing
         if background_tasks:
             background_tasks.add_task(
                 _execute_batch_and_store,
                 job_id,
-                urls
+                items
             )
-        
+
         return {
             "job_id": job_id,
             "status": "queued",
-            "total_urls": len(urls),
-            "message": f"Batch processing started for {len(urls)} products"
+            "total_urls": len(items),
+            "message": f"Batch processing started for {len(items)} products"
         }
     
     except HTTPException:
@@ -307,13 +338,24 @@ async def download_video(video_id: str):
 
 # ==================== Helper Functions ====================
 
-async def _execute_and_store(job_id: str, url: str, brand_override: str = None):
+async def _execute_and_store(
+    job_id: str,
+    url: str,
+    brand_override: str = None,
+    target_audience: str = None,
+    custom_themes: List[str] = None,
+):
     """Execute workflow and store result"""
     try:
         jobs[job_id]["status"] = "processing"
         jobs[job_id]["progress"] = 20
-        
-        result = await orchestrator.execute_workflow(url, brand_override)
+
+        result = await orchestrator.execute_workflow(
+            url,
+            brand_override=brand_override,
+            target_audience=target_audience,
+            custom_themes=custom_themes,
+        )
         
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["progress"] = 100
@@ -328,12 +370,12 @@ async def _execute_and_store(job_id: str, url: str, brand_override: str = None):
         jobs[job_id]["error"] = str(e)
 
 
-async def _execute_batch_and_store(job_id: str, urls: List[str]):
+async def _execute_batch_and_store(job_id: str, items: List[Dict]):
     """Execute batch workflow and store results"""
     try:
         jobs[job_id]["status"] = "processing"
-        
-        result = await orchestrator.execute_batch_workflow(urls)
+
+        result = await orchestrator.execute_batch_workflow(items)
         
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["progress"] = 100

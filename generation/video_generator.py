@@ -31,29 +31,30 @@ class VideoGenerator:
                 self.has_replicate = False
                 logger.warning("Replicate not installed")
     
-    async def generate_videos(self, scripts: List[str]) -> List[Dict]:
+    async def generate_videos(self, scripts: List[str], product_data: Dict = None) -> List[Dict]:
         """
-        Generate 2 short product marketing videos from scripts
-        
+        Generate short product marketing videos from scripts
+
         Returns:
             List of Dict with id, script, url, local_path, duration, created_at, quality_score
         """
         try:
-            logger.info(f"Generating {len(scripts)} product videos")
-            
+            title = (product_data or {}).get("title", "Product")
+            logger.info(f"Generating {len(scripts)} videos for: {title}")
+
             if self.has_replicate and len(scripts) > 0:
-                videos = await self._generate_with_replicate(scripts)
+                videos = await self._generate_with_replicate(scripts, product_data)
             else:
-                videos = await self._generate_mock_videos(scripts)
+                videos = await self._generate_mock_videos(scripts, product_data)
             
             logger.info(f"✓ Generated {len(videos)} videos")
             return videos
             
         except Exception as e:
             logger.error(f"Error generating videos: {str(e)}")
-            return await self._generate_mock_videos(scripts)
-    
-    async def _generate_with_replicate(self, scripts: List[str]) -> List[Dict]:
+            return await self._generate_mock_videos(scripts, product_data)
+
+    async def _generate_with_replicate(self, scripts: List[str], product_data: Dict = None) -> List[Dict]:
         """Generate videos using Replicate API"""
         try:
             import replicate
@@ -65,7 +66,7 @@ class VideoGenerator:
                     logger.info(f"Generating video {i}/{len(scripts)} via Replicate...")
                     
                     # Create text-to-video prompt from script
-                    prompt = self._script_to_prompt(script)
+                    prompt = self._script_to_prompt(script, product_data)
                     
                     # Call Replicate API (using CogVideoX or similar)
                     # Note: This is a placeholder - actual model may vary
@@ -106,15 +107,16 @@ class VideoGenerator:
                 except Exception as e:
                     logger.error(f"Error generating video {i}: {str(e)}")
             
-            return videos_list if videos_list else await self._generate_mock_videos(scripts)
-        
+            return videos_list if videos_list else await self._generate_mock_videos(scripts, product_data)
+
         except Exception as e:
             logger.error(f"Replicate generation failed: {str(e)}")
-            return await self._generate_mock_videos(scripts)
-    
-    async def _generate_mock_videos(self, scripts: List[str]) -> List[Dict]:
+            return await self._generate_mock_videos(scripts, product_data)
+
+    async def _generate_mock_videos(self, scripts: List[str], product_data: Dict = None) -> List[Dict]:
         """Generate mock videos for testing"""
-        logger.info("Generating mock product videos for demo...")
+        title = (product_data or {}).get("title", "Product")
+        logger.info(f"Generating mock videos for: {title}")
         
         videos_list = []
         
@@ -161,7 +163,7 @@ class VideoGenerator:
                     logger.debug(f"FFmpeg not available: {str(e)}")
                 
                 # Fallback: Create text file as video placeholder
-                filepath.write_text(f"Video {i}\nScript: {script}\nDuration: 8s")
+                filepath.write_text(f"Video for {title}\nScript: {script}\nDuration: 8s")
                 
                 videos_list.append({
                     "id": video_id,
@@ -179,11 +181,10 @@ class VideoGenerator:
         
         return videos_list
     
-    def _script_to_prompt(self, script: str) -> str:
+    def _script_to_prompt(self, script: str, product_data: Dict = None) -> str:
         """Convert video script to image generation prompt"""
-        # Extract key elements from script
-        prompt = f"Professional product marketing video. {script[:200]}. High quality, cinematic lighting."
-        return prompt
+        title = (product_data or {}).get("title", "product")
+        return f"Professional marketing video for {title}. {script[:200]}. High quality, cinematic lighting."
 
 
 # Instantiate generator
