@@ -1,0 +1,19 @@
+# Full local development dependencies.
+# Vercel uses requirements.txt, which intentionally excludes heavyweight
+# local ML packages so the serverless bundle stays under Lambda limits.
+-r requirements.txt
+
+streamlit==1.28.1
+playwright==1.40.0
+langgraph==0.0.50
+langchain>=0.1.0,<0.2.0
+diffusers==0.25.0
+transformers==4.35.2
+torch>=2.2.0
+torchvision>=0.17.0
+redis==5.0.1
+celery==5.3.4
+openpyxl>=3.1.0
+csvkit==1.1.1
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
