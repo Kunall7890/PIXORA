@@ -1,4 +1,5 @@
 import os
+import tempfile
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -6,8 +7,11 @@ load_dotenv()
 
 # Paths
 BASE_DIR = Path(__file__).parent
-OUTPUTS_DIR = BASE_DIR / "outputs"
-OUTPUTS_DIR.mkdir(exist_ok=True)
+if os.getenv("VERCEL"):
+    OUTPUTS_DIR = Path(tempfile.gettempdir()) / "pixora" / "outputs"
+else:
+    OUTPUTS_DIR = BASE_DIR / "outputs"
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # API Keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
