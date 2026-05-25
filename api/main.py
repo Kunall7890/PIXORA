@@ -5,7 +5,7 @@ Main API application with endpoints for single and bulk processing
 import logging
 import asyncio
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -412,20 +412,314 @@ async def shutdown_event():
 
 @app.get("/")
 async def root():
-    """Root endpoint with API documentation"""
-    return {
-        "name": "Pixora - AI Creative Generation Engine",
-        "version": "1.0.0",
-        "description": "Generate marketing creatives for e-commerce products",
-        "endpoints": {
-            "health": "/health",
-            "single_generate": "POST /api/v1/generate",
-            "bulk_generate": "POST /api/v1/bulk-generate",
-            "job_status": "GET /api/v1/job/{job_id}",
-            "bulk_job_status": "GET /api/v1/bulk-job/{job_id}",
-            "docs": "/docs"
-        }
+    """Browser UI for the deployed API."""
+    return HTMLResponse(
+        """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pixora Creative Engine</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101114;
+      --panel: #181a20;
+      --panel-2: #20232b;
+      --text: #f5f7fb;
+      --muted: #9aa3b2;
+      --line: #303541;
+      --accent: #35d399;
+      --accent-2: #4da3ff;
+      --danger: #ff6b6b;
     }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0;
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 4vw, 4rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    p { color: var(--muted); line-height: 1.6; }
+    a { color: var(--accent-2); text-decoration: none; }
+    .status {
+      min-width: 180px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-right: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+      gap: 18px;
+    }
+    section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .panel { padding: 18px; }
+    label {
+      display: block;
+      margin: 14px 0 7px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 12px;
+      font: inherit;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent-2); }
+    button {
+      width: 100%;
+      margin-top: 16px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #07110d;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .links a {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .result {
+      min-height: 420px;
+      padding: 18px;
+      overflow: auto;
+    }
+    .empty {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--panel-2);
+    }
+    .item h3 { margin: 0 0 8px; font-size: 1rem; }
+    ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+      margin: 0;
+    }
+    .error { color: var(--danger); }
+    @media (max-width: 820px) {
+      header, .layout { display: block; }
+      .status { margin-top: 18px; }
+      .result { margin-top: 18px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Pixora</h1>
+        <p>Generate product creative strategy, prompts, mock images, and video scripts from an ecommerce product URL.</p>
+      </div>
+      <div class="status"><span class="dot"></span><span id="health">Checking API...</span></div>
+    </header>
+
+    <div class="layout">
+      <section class="panel">
+        <form id="generate-form">
+          <label for="url">Product URL</label>
+          <input id="url" name="url" type="url" placeholder="https://example.com/product" required />
+
+          <label for="brand">Brand override</label>
+          <input id="brand" name="brand" type="text" placeholder="Optional" />
+
+          <label for="audience">Target audience</label>
+          <input id="audience" name="audience" type="text" placeholder="Optional" />
+
+          <button id="submit" type="submit">Generate Creatives</button>
+        </form>
+        <div class="links">
+          <a href="/health">Health</a>
+          <a href="/docs">API Docs</a>
+          <a href="/openapi.json">OpenAPI</a>
+        </div>
+      </section>
+
+      <section class="result" id="result">
+        <div class="empty">
+          <div>
+            <strong>Ready when you are.</strong>
+            <p>Enter a product URL to run the Pixora pipeline.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const health = document.getElementById("health");
+    fetch("/health")
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => { health.textContent = data.status === "healthy" ? "API healthy" : "API online"; })
+      .catch(() => { health.textContent = "API status unavailable"; });
+
+    const form = document.getElementById("generate-form");
+    const urlInput = document.getElementById("url");
+    const brandInput = document.getElementById("brand");
+    const audienceInput = document.getElementById("audience");
+    const result = document.getElementById("result");
+    const submit = document.getElementById("submit");
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+    }
+
+    function listItems(items) {
+      if (!items || !items.length) return "<p>No items returned.</p>";
+      return "<ul>" + items.map((item) => `<li>${escapeHtml(item)}</li>`).join("") + "</ul>";
+    }
+
+    function render(data) {
+      if (data.status === "failed") {
+        result.innerHTML = `<p class="error">${data.error || "Generation failed."}</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+        return;
+      }
+      const product = data.product_data || {};
+      const brief = data.creative_brief || {};
+      const prompts = data.prompts || {};
+      const review = data.critic_review || {};
+
+      result.innerHTML = `
+        <div class="grid">
+          <div class="item">
+            <h3>Product</h3>
+            <p><strong>${escapeHtml(product.title || "Untitled product")}</strong></p>
+            <p>${escapeHtml(product.description || "No description returned.")}</p>
+            ${listItems(product.features || [])}
+          </div>
+          <div class="item">
+            <h3>Strategy</h3>
+            <p><strong>Audience:</strong> ${escapeHtml(brief.target_audience || "N/A")}</p>
+            ${listItems(brief.hooks || [])}
+          </div>
+          <div class="item">
+            <h3>Image Prompts</h3>
+            ${listItems(prompts.image_prompts || [])}
+          </div>
+          <div class="item">
+            <h3>Quality Review</h3>
+            <p><strong>Overall:</strong> ${Math.round((review.overall_quality || 0) * 100)}%</p>
+            ${listItems(review.suggestions || [])}
+          </div>
+        </div>
+      `;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      submit.disabled = true;
+      submit.textContent = "Generating...";
+      result.innerHTML = `<div class="empty"><div><strong>Running pipeline...</strong><p>This can take a little while on serverless.</p></div></div>`;
+
+      const body = {
+        url: urlInput.value,
+        brand_override: brandInput.value || null,
+        target_audience: audienceInput.value || null
+      };
+
+      try {
+        const response = await fetch("/api/v1/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        render(data);
+      } catch (error) {
+        result.innerHTML = `<p class="error">Request failed: ${error.message}</p>`;
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Generate Creatives";
+      }
+    });
+  </script>
+</body>
+</html>
+        """
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon_ico():
+    return Response(status_code=204)
+
+
+@app.get("/favicon.png", include_in_schema=False)
+async def favicon_png():
+    return Response(status_code=204)
 
 
 # ==================== Main ====================
