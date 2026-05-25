@@ -186,6 +186,3 @@ class VideoGenerator:
         title = (product_data or {}).get("title", "product")
         return f"Professional marketing video for {title}. {script[:200]}. High quality, cinematic lighting."
 
-
-# Instantiate generator
-video_generator = VideoGenerator()

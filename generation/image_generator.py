@@ -162,6 +162,3 @@ class ImageGenerator:
         
         return images_list
 
-
-# Instantiate generator
-image_generator = ImageGenerator()
