@@ -22,6 +22,7 @@ from api.models import (
     ProductURLRequest, BulkProcessingRequest, WorkflowOutput,
     JobStatus, JobStatusResponse
 )
+from api.web_ui import WEB_UI_HTML
 
 # Import agents and generators
 from agents.research_agent import product_researcher
@@ -413,6 +414,7 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     """Browser UI for the deployed API."""
+    return HTMLResponse(WEB_UI_HTML)
     return HTMLResponse(
         """
 <!doctype html>
